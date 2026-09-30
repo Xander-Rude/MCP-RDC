@@ -13,3 +13,12 @@ def test_cd_workflow_only_auto_deploys_main_push_from_this_repo():
 
     for guard in required_guards:
         assert guard in workflow
+
+
+def test_cd_uses_password_authentication():
+    workflow = Path(".github/workflows/cd.yml").read_text(encoding="utf-8")
+
+    assert "secrets.MCP_RDC_VPS_PASSWORD" in workflow
+    assert "sshpass -e scp" in workflow
+    assert "sshpass -e ssh" in workflow
+    assert "MCP_RDC_VPS_SSH_KEY" not in workflow
