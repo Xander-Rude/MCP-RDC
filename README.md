@@ -1,116 +1,122 @@
 # MCP-RDC
 
-Self-hosted remote computer control for ChatGPT and Codex over MCP.
+Self-hosted управление удалённым компьютером для ChatGPT и Codex через MCP.
 
-The design is deliberately simple:
+Архитектура специально сделана максимально простой:
 
 ~~~text
-ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows agent -> C:\hh-agent
+ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows-агент -> C:\hh-agent
 ~~~
 
-No SSH server on Windows. No WinRM. No public Windows ports. The Windows agent keeps
-an outbound WebSocket connection to the VPS over the existing WireGuard network.
+Без SSH-сервера на Windows. Без WinRM. Без публичных портов на Windows. Агент на Windows держит
+исходящее WebSocket-соединение с VPS через уже существующую сеть WireGuard.
 
-## What v0.1 contains
+## Что входит в v0.1
 
-- Official MCP Python SDK v2 and Streamable HTTP
-- Persistent Windows agent with reconnect
-- Allowlisted filesystem access
-- Read, write, list and tail files
-- PowerShell execution
-- Process listing
-- Windows Scheduled Task status/start/stop
-- Git HEAD and working-tree status
-- Agent health and metadata
-- MCP tool annotations for read/write/destructive behavior
-- Output limits and agent-token redaction
-- systemd installer for the Linux gateway
-- Scheduled Task installer for the Windows agent
-- Linux and Windows CI
+- Официальный MCP Python SDK v2 и Streamable HTTP
+- Постоянно работающий Windows-агент с автоматическим переподключением
+- Доступ к файловой системе только в разрешённых каталогах
+- Чтение, запись, просмотр каталогов и tail файлов
+- Выполнение PowerShell-команд
+- Просмотр процессов
+- Получение статуса, запуск и остановка Windows Scheduled Tasks
+- Получение Git HEAD и статуса рабочей директории
+- Статус агента и системные метаданные
+- MCP-аннотации для read/write/destructive операций
+- Ограничение размера вывода и маскирование токена агента
+- systemd-инсталлятор для Linux gateway
+- Инсталлятор Windows-агента через Scheduled Task
+- CI для Linux и Windows
 
-## Network layout
+## Сетевая схема
 
-The gateway binds to the VPS WireGuard IP, not the public interface.
+Gateway слушает WireGuard IP VPS, а не публичный интерфейс.
 
-A reverse proxy such as Caddy exposes only:
+Reverse proxy, например Caddy, публикует только:
 
 ~~~text
 https://mcp.example.com/<high-entropy-secret>/mcp
 ~~~
 
-The Windows agent connects directly over WireGuard:
+Windows-агент подключается к gateway напрямую через WireGuard:
 
 ~~~text
 ws://<VPS-WG-IP>:8765/agent/v1/connect
 ~~~
 
-The public reverse proxy must not proxy /agent/v1/connect.
+Публичный reverse proxy не должен проксировать `/agent/v1/connect`.
 
-See docs/ARCHITECTURE.md.
+Подробнее: `docs/ARCHITECTURE.md`.
 
-## Quick deployment
+## Быстрая установка
 
 ### 1. VPS
 
-Clone this repository on the VPS and run:
+Клонируйте репозиторий на VPS и запустите:
 
 ~~~bash
 sudo ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
 ~~~
 
-The installer discovers the VPS WireGuard address, creates a virtual environment,
-installs MCP-RDC, generates both secrets, installs the systemd unit, starts it, and
-prints the exact public MCP URL plus Windows agent values.
+Инсталлятор:
 
-It intentionally does not rewrite an existing reverse-proxy config behind your back.
+- определяет WireGuard IP VPS;
+- создаёт Python virtual environment;
+- устанавливает MCP-RDC;
+- генерирует оба секрета;
+- устанавливает systemd unit;
+- запускает gateway;
+- выводит точный публичный MCP URL и параметры для установки Windows-агента.
+
+Инсталлятор специально не изменяет существующую конфигурацию reverse proxy автоматически.
 
 ### 2. Reverse proxy
 
-Add the Caddy block printed by the installer and reload Caddy.
+Добавьте Caddy-конфигурацию, которую выведет инсталлятор, и перезагрузите Caddy.
 
-A template is in deploy/Caddyfile.example.
+Шаблон находится в `deploy/Caddyfile.example`.
 
 ### 3. Windows / octarin
 
-From elevated PowerShell in a local clone:
+В локальном клоне репозитория запустите PowerShell от имени администратора:
 
 ~~~powershell
 .\scripts\install-windows.ps1 -GatewayWs "ws://10.0.0.1:8765/agent/v1/connect" -AgentToken "<token>" -AgentId "octarin" -AllowedRoots "C:\hh-agent"
 ~~~
 
-The installer creates C:\ProgramData\MCP-RDC, protects the agent configuration,
-and registers MCP-RDC Agent as a SYSTEM Scheduled Task that starts at boot and
-restarts on failure.
+Инсталлятор создаёт каталог `C:\ProgramData\MCP-RDC`, защищает конфигурацию агента
+и регистрирует `MCP-RDC Agent` как SYSTEM Scheduled Task, которая запускается при старте Windows
+и автоматически перезапускается при сбое.
 
 ### 4. ChatGPT
 
-Enable developer mode and add the MCP URL printed by the VPS installer:
+Включите Developer Mode и добавьте MCP URL, который вывел VPS-инсталлятор:
 
 ~~~text
 https://mcp.example.com/<secret>/mcp
 ~~~
 
-For this private single-user deployment the high-entropy endpoint is the access
-credential. Do not publish it. OAuth 2.1 is the next hardening layer if this becomes
-multi-user or public.
+Для приватного single-user deployment этот high-entropy endpoint используется как секрет доступа.
+Не публикуйте его. OAuth 2.1 можно добавить следующим уровнем защиты, если MCP-RDC станет
+многопользовательским или публичным.
 
-## Security model
+## Модель безопасности
 
-Filesystem tools are constrained to configured roots.
+Файловые инструменты могут работать только внутри настроенных разрешённых каталогов.
 
-run_powershell is intentionally privileged and can escape those filesystem
-boundaries. It is therefore marked destructive and non-idempotent in MCP metadata.
+`run_powershell` намеренно обладает расширенными правами и может выйти за пределы файловых
+ограничений. Поэтому в MCP metadata он помечен как destructive и non-idempotent.
 
-The control plane has:
+Контур управления включает:
 
-- TLS on the public reverse proxy
-- a high-entropy unguessable MCP path
-- WireGuard between VPS and Windows
-- a separate high-entropy agent bearer token
-- no public agent route
-- no listening service on Windows public or LAN interfaces
+- TLS на публичном reverse proxy
+- high-entropy, практически неугадываемый MCP path
+- WireGuard между VPS и Windows
+- отдельный high-entropy bearer token для агента
+- отсутствие публичного маршрута к Windows-агенту
+- отсутствие слушающих MCP-RDC сервисов на публичном или LAN-интерфейсе Windows
 
-## Development
+## Разработка
 
 ~~~bash
 python -m venv .venv
@@ -120,6 +126,6 @@ ruff format --check .
 pytest
 ~~~
 
-## License
+## Лицензия
 
 MIT
