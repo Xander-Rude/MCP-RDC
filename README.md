@@ -105,7 +105,7 @@ https://mcp.example.com/<secret>/mcp
 После первичной настройки VPS gateway может обновляться автоматически после каждого успешного CI в `main`.
 
 CD не требует GitHub-токена или deploy key для доступа VPS к репозиторию. GitHub Actions
-архивирует ровно тот commit, который прошёл CI, загружает его на VPS по SSH, запускает
+архивирует ровно тот commit, который прошёл CI, подключается к VPS по SSH с паролем из GitHub Secret, загружает архив и запускает
 `install-vps.sh --quiet`, перезапускает systemd service и проверяет `/healthz`.
 
 Workflow находится в `.github/workflows/cd.yml`.
@@ -116,7 +116,7 @@ Secrets:
 
 - `MCP_RDC_VPS_HOST` - публичный IP или DNS-имя VPS
 - `MCP_RDC_VPS_USER` - SSH-пользователь: root либо пользователь с passwordless sudo
-- `MCP_RDC_VPS_SSH_KEY` - приватный SSH-ключ для этого пользователя
+- `MCP_RDC_VPS_PASSWORD` - пароль SSH-пользователя
 - `MCP_RDC_VPS_KNOWN_HOSTS` - необязательно; строка known_hosts. Если не задана, workflow использует `ssh-keyscan`
 
 Variables:
