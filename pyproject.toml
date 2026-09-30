@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-rdc"
+version = "0.1.0"
+description = "Self-hosted remote desktop commander over MCP"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Alexander Rudenko" }]
+dependencies = [
+  "mcp>=2.0,<3",
+  "psutil>=7,<8",
+  "starlette>=0.47,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "websockets>=15,<17",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "ruff>=0.13,<1",
+]
+
+[project.scripts]
+mcp-rdc-gateway = "mcp_rdc.gateway:main"
+mcp-rdc-agent = "mcp_rdc.agent:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_rdc"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
