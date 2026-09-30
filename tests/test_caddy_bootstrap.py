@@ -19,3 +19,14 @@ def test_vps_installer_pins_caddy_admin_and_waits_for_https():
     assert "curl --fail --silent --show-error" in installer
     assert '--resolve "$DOMAIN:443:127.0.0.1"' in installer
     assert "Caddy failed its HTTPS readiness check." in installer
+
+
+def test_caddy_route_preserves_proxy_before_fallback_404():
+    installer = Path("scripts/install-vps.sh").read_text(encoding="utf-8")
+
+    route_pos = installer.index("    route {")
+    mcp_proxy_pos = installer.index("reverse_proxy @mcp", route_pos)
+    agent_proxy_pos = installer.index("reverse_proxy @agent", route_pos)
+    fallback_pos = installer.index("respond 404", route_pos)
+
+    assert route_pos < mcp_proxy_pos < agent_proxy_pos < fallback_pos
