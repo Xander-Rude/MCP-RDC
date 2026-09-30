@@ -5,11 +5,12 @@ DOMAIN=""
 BIND_HOST="127.0.0.1"
 PORT="8765"
 QUIET="0"
+MANAGE_CADDY="0"
 INSTALL_DIR="/opt/mcp-rdc"
 ENV_DIR="/etc/mcp-rdc"
 
 usage() {
-  echo "Usage: $0 --domain mcp.example.com [--bind 127.0.0.1] [--port 8765] [--quiet]"
+  echo "Usage: $0 --domain mcp.example.com [--bind 127.0.0.1] [--port 8765] [--manage-caddy] [--quiet]"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -17,6 +18,7 @@ while [[ $# -gt 0 ]]; do
     --domain) DOMAIN="$2"; shift 2 ;;
     --bind) BIND_HOST="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --manage-caddy) MANAGE_CADDY="1"; shift ;;
     --quiet) QUIET="1"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1"; usage; exit 2 ;;
@@ -112,7 +114,8 @@ systemctl restart mcp-rdc-gateway
 
 healthy="0"
 for _ in $(seq 1 20); do
-  if systemctl is-active --quiet mcp-rdc-gateway &&     "$INSTALL_DIR/venv/bin/python" - "$BIND_HOST" "$PORT" <<'PY' >/dev/null 2>&1
+  if systemctl is-active --quiet mcp-rdc-gateway && \
+    "$INSTALL_DIR/venv/bin/python" - "$BIND_HOST" "$PORT" <<'PY' >/dev/null 2>&1
 import sys
 import urllib.request
 
@@ -134,8 +137,50 @@ if [[ "$healthy" != "1" ]]; then
   exit 1
 fi
 
+if [[ "$MANAGE_CADDY" == "1" ]]; then
+  CADDY_WAS_PRESENT="0"
+  if command -v caddy >/dev/null 2>&1; then
+    CADDY_WAS_PRESENT="1"
+  else
+    apt-get update
+    apt-get install -y caddy
+  fi
+
+  CADDY_FILE="/etc/caddy/Caddyfile"
+  if [[ "$CADDY_WAS_PRESENT" == "1" && -s "$CADDY_FILE" ]] && \
+     ! grep -q '^# Managed by MCP-RDC$' "$CADDY_FILE"; then
+    echo "Refusing to overwrite existing unmanaged $CADDY_FILE" >&2
+    exit 1
+  fi
+
+  cat > "$CADDY_FILE" <<EOF
+# Managed by MCP-RDC
+$DOMAIN {
+    @mcp path /$PUBLIC_SLUG/mcp /$PUBLIC_SLUG/mcp/*
+    @agent path /$AGENT_SLUG/agent/v1/connect
+    reverse_proxy @mcp $BIND_HOST:$PORT
+    reverse_proxy @agent $BIND_HOST:$PORT
+    respond 404
+}
+EOF
+
+  caddy validate --config "$CADDY_FILE" --adapter caddyfile
+  systemctl enable caddy >/dev/null
+  systemctl restart caddy
+
+  if ! systemctl is-active --quiet caddy; then
+    echo "Caddy failed to start." >&2
+    journalctl -u caddy -n 80 --no-pager >&2 || true
+    exit 1
+  fi
+fi
+
 if [[ "$QUIET" == "1" ]]; then
-  echo "MCP-RDC gateway deployed and healthy on $BIND_HOST:$PORT."
+  if [[ "$MANAGE_CADDY" == "1" ]]; then
+    echo "MCP-RDC gateway and Caddy deployed successfully."
+  else
+    echo "MCP-RDC gateway deployed and healthy on $BIND_HOST:$PORT."
+  fi
   exit 0
 fi
 
@@ -149,16 +194,8 @@ Public ChatGPT MCP endpoint:
 Public Windows agent endpoint:
   wss://$DOMAIN/$AGENT_SLUG/agent/v1/connect
 
-Add this Caddy site (or equivalent reverse-proxy rule):
--------------------------------------------------------
-$DOMAIN {
-    @mcp path /$PUBLIC_SLUG/mcp /$PUBLIC_SLUG/mcp/*
-    @agent path /$AGENT_SLUG/agent/v1/connect
-    reverse_proxy @mcp $BIND_HOST:$PORT
-    reverse_proxy @agent $BIND_HOST:$PORT
-    respond 404
-}
--------------------------------------------------------
+Caddy:
+  $([[ "$MANAGE_CADDY" == "1" ]] && echo "installed/configured automatically" || echo "configure deploy/Caddyfile.example manually")
 
 Windows agent install values:
   Gateway WS: wss://$DOMAIN/$AGENT_SLUG/agent/v1/connect

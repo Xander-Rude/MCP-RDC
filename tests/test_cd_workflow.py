@@ -29,3 +29,9 @@ def test_cd_does_not_depend_on_wireguard_interface():
 
     assert "MCP_RDC_WG_INTERFACE" not in workflow
     assert "--wg-interface" not in workflow
+
+
+def test_cd_bootstraps_caddy():
+    workflow = Path(".github/workflows/cd.yml").read_text(encoding="utf-8")
+
+    assert "--manage-caddy" in workflow
