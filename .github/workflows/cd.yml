@@ -106,7 +106,7 @@ jobs:
 
           as_root mkdir -p "$RELEASE_DIR"
           as_root tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
-          as_root bash "$RELEASE_DIR/scripts/install-vps.sh"             --domain "$DOMAIN"             --quiet
+          as_root bash "$RELEASE_DIR/scripts/install-vps.sh"             --domain "$DOMAIN"             --manage-caddy             --quiet
           as_root ln -sfn "$RELEASE_DIR" /opt/mcp-rdc/current-source
           rm -f "$ARCHIVE"
 
