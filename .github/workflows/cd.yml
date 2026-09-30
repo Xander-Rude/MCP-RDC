@@ -33,7 +33,7 @@ jobs:
     env:
       DEPLOY_HOST: ${{ secrets.MCP_RDC_VPS_HOST }}
       DEPLOY_USER: ${{ secrets.MCP_RDC_VPS_USER }}
-      DEPLOY_KEY: ${{ secrets.MCP_RDC_VPS_SSH_KEY }}
+      SSHPASS: ${{ secrets.MCP_RDC_VPS_PASSWORD }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.MCP_RDC_VPS_KNOWN_HOSTS }}
       DEPLOY_PORT: ${{ vars.MCP_RDC_VPS_SSH_PORT || '22' }}
       MCP_DOMAIN: ${{ vars.MCP_RDC_DOMAIN }}
@@ -47,7 +47,7 @@ jobs:
           set -euo pipefail
           [[ -n "$DEPLOY_HOST" ]] || { echo "Missing secret MCP_RDC_VPS_HOST"; exit 1; }
           [[ -n "$DEPLOY_USER" ]] || { echo "Missing secret MCP_RDC_VPS_USER"; exit 1; }
-          [[ -n "$DEPLOY_KEY" ]] || { echo "Missing secret MCP_RDC_VPS_SSH_KEY"; exit 1; }
+          [[ -n "$SSHPASS" ]] || { echo "Missing secret MCP_RDC_VPS_PASSWORD"; exit 1; }
           [[ -n "$MCP_DOMAIN" ]] || { echo "Missing variable MCP_RDC_DOMAIN"; exit 1; }
           [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || { echo "Invalid MCP_RDC_VPS_SSH_PORT"; exit 1; }
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid deploy SHA"; exit 1; }
@@ -58,13 +58,13 @@ jobs:
           ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 1
 
-      - name: Configure SSH
+      - name: Configure password SSH
         shell: bash
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends sshpass
           install -d -m 0700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
-          chmod 0600 ~/.ssh/id_ed25519
 
           if [[ -n "$DEPLOY_KNOWN_HOSTS" ]]; then
             printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
@@ -83,13 +83,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          scp -P "$DEPLOY_PORT"             "/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"
+          sshpass -e scp -P "$DEPLOY_PORT"             "/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"
 
       - name: Deploy and verify gateway
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash -s -- '$DEPLOY_SHA' '$MCP_DOMAIN' '$WG_INTERFACE'" <<'REMOTE'
+          sshpass -e ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash -s -- '$DEPLOY_SHA' '$MCP_DOMAIN' '$WG_INTERFACE'" <<'REMOTE'
           set -euo pipefail
 
           SHA="$1"
