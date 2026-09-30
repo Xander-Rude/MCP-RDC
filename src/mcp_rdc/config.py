@@ -42,7 +42,7 @@ class GatewaySettings:
         ]
 
     @classmethod
-    def from_env(cls, *, strict: bool = True) -> "GatewaySettings":
+    def from_env(cls, *, strict: bool = True) -> GatewaySettings:
         public_host = os.getenv("MCP_RDC_PUBLIC_HOST", "localhost").strip() or "localhost"
         public_slug = _required(
             "MCP_RDC_PUBLIC_SLUG", strict=strict, fallback="dev-personal-endpoint"
@@ -76,7 +76,7 @@ class AgentSettings:
     reconnect_max_seconds: float
 
     @classmethod
-    def from_env(cls, *, strict: bool = True) -> "AgentSettings":
+    def from_env(cls, *, strict: bool = True) -> AgentSettings:
         gateway_ws = _required(
             "MCP_RDC_GATEWAY_WS",
             strict=strict,
