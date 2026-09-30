@@ -74,11 +74,11 @@ sudo bash ./scripts/install-vps.sh --domain mcp.example.com
 
 ### 2. Reverse proxy
 
-Добавьте Caddy-конфигурацию, которую выведет инсталлятор, и перезагрузите Caddy.
+На чистом VPS можно передать `--manage-caddy`: инсталлятор сам установит Caddy, создаст конфиг и включит TLS.
 
-Шаблон находится в `deploy/Caddyfile.example`.
+Если Caddy уже был установлен с чужой конфигурацией, инсталлятор откажется её перезаписывать.
 
-Caddy автоматически проксирует WebSocket upgrade, отдельная настройка для WSS не требуется.
+Шаблон ручной конфигурации находится в `deploy/Caddyfile.example`.
 
 ### 3. Windows / octarin
 
@@ -110,7 +110,7 @@ https://mcp.example.com/<mcp-secret>/mcp
 
 CD не требует GitHub-токена для доступа VPS к репозиторию. GitHub Actions архивирует ровно тот
 commit, который прошёл CI, подключается к VPS по SSH с паролем из GitHub Secret, загружает архив,
-запускает `install-vps.sh --quiet`, перезапускает systemd service и проверяет `/healthz`.
+запускает `install-vps.sh --manage-caddy --quiet`, поднимает/обновляет Caddy, перезапускает systemd service и проверяет `/healthz`.
 
 Workflow находится в `.github/workflows/cd.yml`.
 
