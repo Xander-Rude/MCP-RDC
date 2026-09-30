@@ -107,10 +107,10 @@ Get-Content $configPath | ForEach-Object {
 
 $acl = Get-Acl $configPath
 $acl.SetAccessRuleProtection($true, $false)
-$admins = New-Object System.Security.Principal.NTAccount("BUILTIN", "Administrators")
-$system = New-Object System.Security.Principal.NTAccount("NT AUTHORITY", "SYSTEM")
-$adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule($admins, "FullControl", "Allow")
-$systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule($system, "FullControl", "Allow")
+$adminsSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
+$systemSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-18")
+$adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule($adminsSid, "FullControl", "Allow")
+$systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid, "FullControl", "Allow")
 $acl.AddAccessRule($adminRule) | Out-Null
 $acl.AddAccessRule($systemRule) | Out-Null
 Set-Acl -Path $configPath -AclObject $acl
@@ -119,7 +119,7 @@ $taskName = "MCP-RDC Agent"
 $actionArgs = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $runScript + '"'
 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $actionArgs
 $trigger = New-ScheduledTaskTrigger -AtStartup
-$taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$taskPrincipal = New-ScheduledTaskPrincipal -UserId "S-1-5-18" -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $taskPrincipal -Settings $settings -Force | Out-Null
