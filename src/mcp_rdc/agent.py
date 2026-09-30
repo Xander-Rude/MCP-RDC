@@ -346,6 +346,19 @@ async def _handle_request(
         await websocket.send(json.dumps(response, ensure_ascii=False))
 
 
+async def _heartbeat(websocket: Any, send_lock: asyncio.Lock, interval: float = 15.0) -> None:
+    while True:
+        await asyncio.sleep(interval)
+        async with send_lock:
+            await websocket.send(json.dumps({"type": "heartbeat"}))
+
+
+def _consume_task_result(task: asyncio.Task[None], tasks: set[asyncio.Task[None]]) -> None:
+    tasks.discard(task)
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        task.result()
+
+
 async def run_agent(settings: AgentSettings) -> None:
     runtime = AgentRuntime(settings)
     url = _append_query(settings.gateway_ws, agent_id=settings.agent_id)
@@ -366,15 +379,26 @@ async def run_agent(settings: AgentSettings) -> None:
                 hello = {"type": "hello", "metadata": await runtime.system_info({})}
                 await websocket.send(json.dumps(hello, ensure_ascii=False))
                 tasks: set[asyncio.Task[None]] = set()
-                async for raw in websocket:
-                    payload = json.loads(raw)
-                    if not isinstance(payload, dict) or payload.get("type") != "request":
-                        continue
-                    task = asyncio.create_task(
-                        _handle_request(websocket, send_lock, runtime, payload)
-                    )
-                    tasks.add(task)
-                    task.add_done_callback(tasks.discard)
+                heartbeat = asyncio.create_task(_heartbeat(websocket, send_lock))
+                tasks.add(heartbeat)
+                heartbeat.add_done_callback(lambda task: _consume_task_result(task, tasks))
+                try:
+                    async for raw in websocket:
+                        payload = json.loads(raw)
+                        if not isinstance(payload, dict) or payload.get("type") != "request":
+                            continue
+                        task = asyncio.create_task(
+                            _handle_request(websocket, send_lock, runtime, payload)
+                        )
+                        tasks.add(task)
+                        task.add_done_callback(
+                            lambda done: _consume_task_result(done, tasks)
+                        )
+                finally:
+                    for task in tasks:
+                        task.cancel()
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
