@@ -47,9 +47,7 @@ class GatewaySettings:
         public_slug = _required(
             "MCP_RDC_PUBLIC_SLUG", strict=strict, fallback="dev-personal-endpoint"
         )
-        agent_token = _required(
-            "MCP_RDC_AGENT_TOKEN", strict=strict, fallback="dev-agent-token"
-        )
+        agent_token = _required("MCP_RDC_AGENT_TOKEN", strict=strict, fallback="dev-agent-token")
         if strict and len(public_slug) < 20:
             raise RuntimeError("MCP_RDC_PUBLIC_SLUG must be at least 20 characters")
         if strict and len(agent_token) < 32:
@@ -87,9 +85,7 @@ class AgentSettings:
         )
         raw_roots = os.getenv("MCP_RDC_ALLOWED_ROOTS", r"C:\hh-agent")
         roots = tuple(
-            Path(item.strip()).expanduser()
-            for item in raw_roots.split(os.pathsep)
-            if item.strip()
+            Path(item.strip()).expanduser() for item in raw_roots.split(os.pathsep) if item.strip()
         )
         if not roots:
             raise RuntimeError("MCP_RDC_ALLOWED_ROOTS must contain at least one path")
