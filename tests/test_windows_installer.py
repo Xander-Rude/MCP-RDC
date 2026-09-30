@@ -23,3 +23,11 @@ def test_windows_installer_uses_language_neutral_sids():
     assert '-UserId "S-1-5-18"' in installer
     assert 'NTAccount("BUILTIN", "Administrators")' not in installer
     assert 'NTAccount("NT AUTHORITY", "SYSTEM")' not in installer
+
+
+def test_windows_installer_rejects_drive_root_access():
+    installer = Path("scripts/install-windows.ps1").read_text(encoding="utf-8")
+
+    assert "Refusing drive-root access in AllowedRoots" in installer
+    assert "[IO.Path]::GetPathRoot" in installer
+    assert "C:\\hh-agent" in installer

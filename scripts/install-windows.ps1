@@ -47,6 +47,19 @@ if (-not $SourceRoot) {
     $SourceRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
+foreach ($allowedRoot in $AllowedRoots.Split([IO.Path]::PathSeparator)) {
+    $trimmedRoot = $allowedRoot.Trim()
+    if (-not $trimmedRoot) {
+        continue
+    }
+
+    $fullRoot = [IO.Path]::GetFullPath($trimmedRoot)
+    $driveRoot = [IO.Path]::GetPathRoot($fullRoot)
+    if ($fullRoot.TrimEnd("\") -ieq $driveRoot.TrimEnd("\")) {
+        throw "Refusing drive-root access in AllowedRoots: $fullRoot. Use a narrower directory such as C:\hh-agent."
+    }
+}
+
 $py = Get-Command py -ErrorAction SilentlyContinue
 if ($py) {
     $pythonExe = "py"

@@ -165,12 +165,17 @@ if [[ "$MANAGE_CADDY" == "1" ]]; then
   fi
 
   cat > "$CADDY_FILE" <<EOF
+{
+    admin 127.0.0.1:2019
+}
+
 # Managed by MCP-RDC
 $DOMAIN {
     @mcp path /$PUBLIC_SLUG/mcp /$PUBLIC_SLUG/mcp/*
     @agent path /$AGENT_SLUG/agent/v1/connect
     reverse_proxy @mcp $BIND_HOST:$PORT
     reverse_proxy @agent $BIND_HOST:$PORT
+    respond /healthz "ok" 200
     respond 404
 }
 EOF
@@ -179,8 +184,26 @@ EOF
   systemctl enable caddy >/dev/null
   systemctl restart caddy
 
-  if ! systemctl is-active --quiet caddy; then
-    echo "Caddy failed to start." >&2
+  if ! command -v curl >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y curl
+  fi
+
+  caddy_ready="0"
+  for _ in $(seq 1 30); do
+    if ! systemctl is-active --quiet caddy; then
+      break
+    fi
+    if curl --fail --silent --show-error       --resolve "$DOMAIN:443:127.0.0.1"       "https://$DOMAIN/healthz" >/dev/null 2>&1; then
+      caddy_ready="1"
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ "$caddy_ready" != "1" ]]; then
+    echo "Caddy failed its HTTPS readiness check." >&2
+    systemctl status caddy --no-pager >&2 || true
     journalctl -u caddy -n 80 --no-pager >&2 || true
     exit 1
   fi
