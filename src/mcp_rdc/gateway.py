@@ -174,9 +174,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
         title="Scheduled task status",
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
     )
-    async def scheduled_task_status(
-        name: str, agent_id: str | None = None
-    ) -> dict[str, Any]:
+    async def scheduled_task_status(name: str, agent_id: str | None = None) -> dict[str, Any]:
         """Get state and last/next run information for a Windows Scheduled Task."""
         return await remote("task.status", {"name": name}, agent_id=agent_id)
 
@@ -189,9 +187,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
             open_world_hint=False,
         ),
     )
-    async def start_scheduled_task(
-        name: str, agent_id: str | None = None
-    ) -> dict[str, Any]:
+    async def start_scheduled_task(name: str, agent_id: str | None = None) -> dict[str, Any]:
         """Start a Windows Scheduled Task on the remote agent."""
         return await remote("task.start", {"name": name}, agent_id=agent_id)
 
@@ -204,9 +200,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
             open_world_hint=False,
         ),
     )
-    async def stop_scheduled_task(
-        name: str, agent_id: str | None = None
-    ) -> dict[str, Any]:
+    async def stop_scheduled_task(name: str, agent_id: str | None = None) -> dict[str, Any]:
         """Stop a running Windows Scheduled Task on the remote agent."""
         return await remote("task.stop", {"name": name}, agent_id=agent_id)
 
@@ -214,9 +208,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
         title="Git status",
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
     )
-    async def git_status(
-        repo_path: str = "", agent_id: str | None = None
-    ) -> dict[str, Any]:
+    async def git_status(repo_path: str = "", agent_id: str | None = None) -> dict[str, Any]:
         """Return git branch and short working-tree status for a repository."""
         return await remote("git.status", {"repo_path": repo_path}, agent_id=agent_id)
 
@@ -224,9 +216,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
         title="Git HEAD",
         annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False),
     )
-    async def git_head(
-        repo_path: str = "", agent_id: str | None = None
-    ) -> dict[str, Any]:
+    async def git_head(repo_path: str = "", agent_id: str | None = None) -> dict[str, Any]:
         """Return current git commit SHA and branch for a repository."""
         return await remote("git.head", {"repo_path": repo_path}, agent_id=agent_id)
 
