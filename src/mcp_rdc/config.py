@@ -80,9 +80,7 @@ class AgentSettings:
             strict=strict,
             fallback="ws://127.0.0.1:8765/agent/v1/connect",
         )
-        agent_token = _required(
-            "MCP_RDC_AGENT_TOKEN", strict=strict, fallback="dev-agent-token"
-        )
+        agent_token = _required("MCP_RDC_AGENT_TOKEN", strict=strict, fallback="dev-agent-token")
         raw_roots = os.getenv("MCP_RDC_ALLOWED_ROOTS", r"C:\hh-agent")
         roots = tuple(
             Path(item.strip()).expanduser() for item in raw_roots.split(os.pathsep) if item.strip()
