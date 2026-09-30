@@ -13,6 +13,30 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Invoke-NativeCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [string[]]$Arguments = @()
+    )
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 surfaces native stderr as ErrorRecord objects.
+        # Do not treat stderr alone as a terminating PowerShell error; trust the process exit code.
+        $ErrorActionPreference = "Continue"
+        & $FilePath @Arguments
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($exitCode -ne 0) {
+        throw "$FilePath exited with code $exitCode"
+    }
+}
+
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principalCheck = New-Object Security.Principal.WindowsPrincipal($identity)
 if (-not $principalCheck.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -32,9 +56,16 @@ if ($py) {
     if (-not $python) {
         $winget = Get-Command winget -ErrorAction SilentlyContinue
         if (-not $winget) {
-            throw "Python 3.11+ is required and winget is unavailable."
+            throw "Python 3.10+ is required and winget is unavailable."
         }
-        winget install --id Python.Python.3.12 --exact --silent --accept-package-agreements --accept-source-agreements
+        Invoke-NativeCommand -FilePath $winget.Source -Arguments @(
+            "install",
+            "--id", "Python.Python.3.12",
+            "--exact",
+            "--silent",
+            "--accept-package-agreements",
+            "--accept-source-agreements"
+        )
         $python = Get-Command python -ErrorAction SilentlyContinue
         if (-not $python) {
             throw "Python was installed but is not visible in PATH yet. Re-open PowerShell and rerun."
@@ -46,11 +77,11 @@ if ($py) {
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $venv = Join-Path $InstallDir "venv"
-& $pythonExe @pythonArgs -m venv $venv
+Invoke-NativeCommand -FilePath $pythonExe -Arguments ($pythonArgs + @("-m", "venv", $venv))
 
 $pip = Join-Path $venv "Scripts\pip.exe"
-& $pip install --upgrade pip
-& $pip install $SourceRoot
+Invoke-NativeCommand -FilePath $pip -Arguments @("install", "--upgrade", "pip")
+Invoke-NativeCommand -FilePath $pip -Arguments @("install", $SourceRoot)
 
 $configPath = Join-Path $InstallDir "agent.env"
 @"
