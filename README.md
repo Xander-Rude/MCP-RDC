@@ -5,11 +5,13 @@ Self-hosted управление удалённым компьютером дл�
 Архитектура специально сделана максимально простой:
 
 ~~~text
-ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows-агент 
+ChatGPT -> HTTPS/MCP -> VPS gateway <- WSS/TLS <- Windows-агент
 ~~~
 
-Без SSH-сервера на Windows. Без WinRM. Без публичных портов на Windows. Агент на Windows держит
-исходящее WebSocket-соединение с VPS через уже существующую сеть WireGuard.
+Без SSH-сервера на Windows. Без WinRM. Без публичных портов на Windows. Агент сам держит
+исходящее защищённое WebSocket-соединение с VPS.
+
+MCP-RDC не зависит от того, где и как у вас поднят WireGuard: на хосте, в Docker или его нет вообще.
 
 ## Что входит в v0.1
 
@@ -27,24 +29,25 @@ ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows-агент
 - systemd-инсталлятор для Linux gateway
 - Инсталлятор Windows-агента через Scheduled Task
 - CI для Linux и Windows
+- CD на VPS после успешного CI
 
 ## Сетевая схема
 
-Gateway слушает WireGuard IP VPS, а не публичный интерфейс.
-
-Reverse proxy, например Caddy, публикует только:
+Gateway по умолчанию слушает только localhost на VPS:
 
 ~~~text
-https://mcp.example.com/<high-entropy-secret>/mcp
+127.0.0.1:8765
 ~~~
 
-Windows-агент подключается к gateway напрямую через WireGuard:
+Reverse proxy, например Caddy, публикует два отдельных TLS-маршрута:
 
 ~~~text
-ws://<VPS-WG-IP>:8765/agent/v1/connect
+https://mcp.example.com/<mcp-secret>/mcp
+wss://mcp.example.com/<agent-secret>/agent/v1/connect
 ~~~
 
-Публичный reverse proxy не должен проксировать `/agent/v1/connect`.
+MCP URL используется ChatGPT/Codex. Второй URL используется только Windows-агентом и
+дополнительно защищён отдельным bearer token.
 
 Подробнее: `docs/ARCHITECTURE.md`.
 
@@ -55,20 +58,19 @@ ws://<VPS-WG-IP>:8765/agent/v1/connect
 Клонируйте репозиторий на VPS и запустите:
 
 ~~~bash
-sudo bash ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
+sudo bash ./scripts/install-vps.sh --domain mcp.example.com
 ~~~
 
 Инсталлятор:
 
-- определяет WireGuard IP VPS;
 - создаёт Python virtual environment;
 - устанавливает MCP-RDC;
-- генерирует оба секрета;
+- генерирует отдельные секретные пути для MCP и Windows-агента;
+- генерирует bearer token агента;
 - устанавливает systemd unit;
-- запускает gateway;
-- выводит точный публичный MCP URL и параметры для установки Windows-агента.
-
-Инсталлятор специально не изменяет существующую конфигурацию reverse proxy автоматически.
+- запускает gateway только на localhost;
+- проверяет `/healthz`;
+- выводит точный MCP URL, agent WSS URL и Caddy-конфигурацию.
 
 ### 2. Reverse proxy
 
@@ -76,12 +78,14 @@ sudo bash ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
 
 Шаблон находится в `deploy/Caddyfile.example`.
 
+Caddy автоматически проксирует WebSocket upgrade, отдельная настройка для WSS не требуется.
+
 ### 3. Windows / octarin
 
 В локальном клоне репозитория запустите PowerShell от имени администратора:
 
 ~~~powershell
-.\scripts\install-windows.ps1 -GatewayWs "ws://10.0.0.1:8765/agent/v1/connect" -AgentToken "<token>" -AgentId "octarin" -AllowedRoots "C:\hh-agent"
+.\scripts\install-windows.ps1 -GatewayWs "wss://mcp.example.com/<agent-secret>/agent/v1/connect" -AgentToken "<token>" -AgentId "octarin" -AllowedRoots "C:\hh-agent"
 ~~~
 
 Инсталлятор создаёт каталог `C:\ProgramData\MCP-RDC`, защищает конфигурацию агента
@@ -93,10 +97,10 @@ sudo bash ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
 Включите Developer Mode и добавьте MCP URL, который вывел VPS-инсталлятор:
 
 ~~~text
-https://mcp.example.com/<secret>/mcp
+https://mcp.example.com/<mcp-secret>/mcp
 ~~~
 
-Для приватного single-user deployment этот high-entropy endpoint используется как секрет доступа.
+Для приватного single-user deployment high-entropy MCP path используется как секрет доступа.
 Не публикуйте его. OAuth 2.1 можно добавить следующим уровнем защиты, если MCP-RDC станет
 многопользовательским или публичным.
 
@@ -104,9 +108,9 @@ https://mcp.example.com/<secret>/mcp
 
 После первичной настройки VPS gateway может обновляться автоматически после каждого успешного CI в `main`.
 
-CD не требует GitHub-токена или deploy key для доступа VPS к репозиторию. GitHub Actions
-архивирует ровно тот commit, который прошёл CI, подключается к VPS по SSH с паролем из GitHub Secret, загружает архив и запускает
-`install-vps.sh --quiet`, перезапускает systemd service и проверяет `/healthz`.
+CD не требует GitHub-токена для доступа VPS к репозиторию. GitHub Actions архивирует ровно тот
+commit, который прошёл CI, подключается к VPS по SSH с паролем из GitHub Secret, загружает архив,
+запускает `install-vps.sh --quiet`, перезапускает systemd service и проверяет `/healthz`.
 
 Workflow находится в `.github/workflows/cd.yml`.
 
@@ -123,7 +127,6 @@ Variables:
 
 - `MCP_RDC_CD_ENABLED=true` - включает автоматический deploy
 - `MCP_RDC_DOMAIN=mcp.example.com` - публичный домен MCP
-- `MCP_RDC_WG_INTERFACE=wg0` - WireGuard-интерфейс VPS
 - `MCP_RDC_VPS_SSH_PORT=22` - SSH-порт
 
 Пока `MCP_RDC_CD_ENABLED` не равен `true`, CD workflow безопасно пропускает deploy.
@@ -141,11 +144,11 @@ Variables:
 Контур управления включает:
 
 - TLS на публичном reverse proxy
-- high-entropy, практически неугадываемый MCP path
-- WireGuard между VPS и Windows
-- отдельный high-entropy bearer token для агента
-- отсутствие публичного маршрута к Windows-агенту
-- отсутствие слушающих MCP-RDC сервисов на публичном или LAN-интерфейсе Windows
+- отдельный high-entropy MCP path
+- отдельный high-entropy agent path
+- отдельный high-entropy bearer token для Windows-агента
+- gateway слушает только localhost
+- отсутствие входящих MCP-RDC портов на Windows
 
 ## Разработка
 

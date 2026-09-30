@@ -263,7 +263,7 @@ def build_gateway_app(settings: GatewaySettings) -> Starlette:
     return Starlette(
         routes=[
             Route("/healthz", health, methods=["GET"]),
-            WebSocketRoute("/agent/v1/connect", agent_socket),
+            WebSocketRoute(settings.agent_path, agent_socket),
             Mount("/", app=mcp_app),
         ],
         lifespan=lifespan,

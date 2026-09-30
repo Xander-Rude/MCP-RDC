@@ -22,3 +22,10 @@ def test_cd_uses_password_authentication():
     assert "sshpass -e scp" in workflow
     assert "sshpass -e ssh" in workflow
     assert "MCP_RDC_VPS_SSH_KEY" not in workflow
+
+
+def test_cd_does_not_depend_on_wireguard_interface():
+    workflow = Path(".github/workflows/cd.yml").read_text(encoding="utf-8")
+
+    assert "MCP_RDC_WG_INTERFACE" not in workflow
+    assert "--wg-interface" not in workflow

@@ -37,7 +37,6 @@ jobs:
       DEPLOY_KNOWN_HOSTS: ${{ secrets.MCP_RDC_VPS_KNOWN_HOSTS }}
       DEPLOY_PORT: ${{ vars.MCP_RDC_VPS_SSH_PORT || '22' }}
       MCP_DOMAIN: ${{ vars.MCP_RDC_DOMAIN }}
-      WG_INTERFACE: ${{ vars.MCP_RDC_WG_INTERFACE || 'wg0' }}
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
@@ -89,12 +88,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sshpass -e ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash -s -- '$DEPLOY_SHA' '$MCP_DOMAIN' '$WG_INTERFACE'" <<'REMOTE'
+          sshpass -e ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash -s -- '$DEPLOY_SHA' '$MCP_DOMAIN'" <<'REMOTE'
           set -euo pipefail
 
           SHA="$1"
           DOMAIN="$2"
-          WG_IF="$3"
           ARCHIVE="/tmp/mcp-rdc-$SHA.tar.gz"
           RELEASE_DIR="/opt/mcp-rdc/releases/$SHA"
 
@@ -108,7 +106,7 @@ jobs:
 
           as_root mkdir -p "$RELEASE_DIR"
           as_root tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
-          as_root bash "$RELEASE_DIR/scripts/install-vps.sh"             --domain "$DOMAIN"             --wg-interface "$WG_IF"             --quiet
+          as_root bash "$RELEASE_DIR/scripts/install-vps.sh"             --domain "$DOMAIN"             --quiet
           as_root ln -sfn "$RELEASE_DIR" /opt/mcp-rdc/current-source
           rm -f "$ARCHIVE"
 

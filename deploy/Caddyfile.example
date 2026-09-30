@@ -1,9 +1,12 @@
 # Replace placeholders with values printed by scripts/install-vps.sh.
-# The gateway binds only to the VPS WireGuard address.
-# Only the secret MCP path is exposed on public HTTPS. /agent is not proxied.
+# The gateway binds to localhost. Caddy terminates TLS for both MCP and agent WebSocket.
 
 mcp.example.com {
     @mcp path /REPLACE_WITH_PUBLIC_SLUG/mcp /REPLACE_WITH_PUBLIC_SLUG/mcp/*
-    reverse_proxy @mcp 10.0.0.1:8765
+    @agent path /REPLACE_WITH_AGENT_SLUG/agent/v1/connect
+
+    reverse_proxy @mcp 127.0.0.1:8765
+    reverse_proxy @agent 127.0.0.1:8765
+
     respond 404
 }
