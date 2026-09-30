@@ -171,12 +171,16 @@ if [[ "$MANAGE_CADDY" == "1" ]]; then
 
 # Managed by MCP-RDC
 $DOMAIN {
-    @mcp path /$PUBLIC_SLUG/mcp /$PUBLIC_SLUG/mcp/*
-    @agent path /$AGENT_SLUG/agent/v1/connect
-    reverse_proxy @mcp $BIND_HOST:$PORT
-    reverse_proxy @agent $BIND_HOST:$PORT
-    respond /healthz "ok" 200
-    respond 404
+    route {
+        @mcp path /$PUBLIC_SLUG/mcp /$PUBLIC_SLUG/mcp/*
+        reverse_proxy @mcp $BIND_HOST:$PORT
+
+        @agent path /$AGENT_SLUG/agent/v1/connect
+        reverse_proxy @agent $BIND_HOST:$PORT
+
+        respond /healthz "ok" 200
+        respond 404
+    }
 }
 EOF
 
