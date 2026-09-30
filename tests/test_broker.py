@@ -62,3 +62,15 @@ async def test_offline_agent():
     broker = AgentBroker()
     with pytest.raises(AgentOfflineError):
         await broker.call("missing", "system.info", timeout=0.01)
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_refreshes_last_seen():
+    broker = AgentBroker()
+    socket = FakeSocket()
+    connection = await broker.register("octarin", socket)
+    connection.last_seen = 0
+
+    await broker.handle_message("octarin", {"type": "heartbeat"})
+
+    assert connection.last_seen > 0
