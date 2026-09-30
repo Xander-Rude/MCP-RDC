@@ -121,9 +121,7 @@ class AgentBroker:
         except TimeoutError as exc:
             if not future.done():
                 future.cancel()
-            raise TimeoutError(
-                f"agent {agent_id!r} timed out while executing {method!r}"
-            ) from exc
+            raise TimeoutError(f"agent {agent_id!r} timed out while executing {method!r}") from exc
         finally:
             self._pending.pop(request_id, None)
 
