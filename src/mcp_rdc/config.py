@@ -52,9 +52,7 @@ class GatewaySettings:
         public_slug = _required(
             "MCP_RDC_PUBLIC_SLUG", strict=strict, fallback="dev-personal-endpoint"
         )
-        agent_slug = _required(
-            "MCP_RDC_AGENT_SLUG", strict=strict, fallback="dev-agent-endpoint"
-        )
+        agent_slug = _required("MCP_RDC_AGENT_SLUG", strict=strict, fallback="dev-agent-endpoint")
         agent_token = _required("MCP_RDC_AGENT_TOKEN", strict=strict, fallback="dev-agent-token")
         if strict and len(public_slug) < 20:
             raise RuntimeError("MCP_RDC_PUBLIC_SLUG must be at least 20 characters")
