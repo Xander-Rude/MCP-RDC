@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import json
 import os
 import platform
@@ -381,7 +382,8 @@ async def run_agent(settings: AgentSettings) -> None:
                 tasks: set[asyncio.Task[None]] = set()
                 heartbeat = asyncio.create_task(_heartbeat(websocket, send_lock))
                 tasks.add(heartbeat)
-                heartbeat.add_done_callback(lambda task: _consume_task_result(task, tasks))
+                on_task_done = functools.partial(_consume_task_result, tasks=tasks)
+                heartbeat.add_done_callback(on_task_done)
                 try:
                     async for raw in websocket:
                         payload = json.loads(raw)
@@ -391,9 +393,7 @@ async def run_agent(settings: AgentSettings) -> None:
                             _handle_request(websocket, send_lock, runtime, payload)
                         )
                         tasks.add(task)
-                        task.add_done_callback(
-                            lambda done: _consume_task_result(done, tasks)
-                        )
+                        task.add_done_callback(on_task_done)
                 finally:
                     for task in tasks:
                         task.cancel()
