@@ -5,7 +5,7 @@ Self-hosted управление удалённым компьютером дл�
 Архитектура специально сделана максимально простой:
 
 ~~~text
-ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows-агент -> C:\hh-agent
+ChatGPT -> HTTPS / MCP -> Linux VPS -> WireGuard -> Windows-агент 
 ~~~
 
 Без SSH-сервера на Windows. Без WinRM. Без публичных портов на Windows. Агент на Windows держит
