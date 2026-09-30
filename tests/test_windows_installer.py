@@ -30,4 +30,4 @@ def test_windows_installer_rejects_drive_root_access():
 
     assert "Refusing drive-root access in AllowedRoots" in installer
     assert "[IO.Path]::GetPathRoot" in installer
-    assert 'C:\\hh-agent' in installer
+    assert "C:\\hh-agent" in installer
