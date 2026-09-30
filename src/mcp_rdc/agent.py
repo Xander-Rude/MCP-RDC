@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import platform
@@ -82,14 +83,10 @@ class AgentRuntime:
         except psutil.Error:
             return
         for process in parent.children(recursive=True):
-            try:
+            with contextlib.suppress(psutil.Error):
                 process.kill()
-            except psutil.Error:
-                pass
-        try:
+        with contextlib.suppress(psutil.Error):
             parent.kill()
-        except psutil.Error:
-            pass
 
     async def _run(
         self,
@@ -116,10 +113,10 @@ class AgentRuntime:
             stdout_raw, stderr_raw = await asyncio.wait_for(
                 process.communicate(), timeout=effective_timeout
             )
-        except TimeoutError:
+        except TimeoutError as exc:
             await self._kill_tree(process.pid)
             await process.wait()
-            raise TimeoutError(f"command exceeded {effective_timeout:.1f}s")
+            raise TimeoutError(f"command exceeded {effective_timeout:.1f}s") from exc
 
         stdout, stdout_truncated = self._truncate(stdout_raw.decode("utf-8", errors="replace"))
         stderr, stderr_truncated = self._truncate(stderr_raw.decode("utf-8", errors="replace"))
@@ -389,10 +386,8 @@ async def run_agent(settings: AgentSettings) -> None:
 
 def main() -> None:
     settings = AgentSettings.from_env(strict=True)
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(run_agent(settings))
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":
