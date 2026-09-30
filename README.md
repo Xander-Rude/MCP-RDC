@@ -55,7 +55,7 @@ ws://<VPS-WG-IP>:8765/agent/v1/connect
 Клонируйте репозиторий на VPS и запустите:
 
 ~~~bash
-sudo ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
+sudo bash ./scripts/install-vps.sh --domain mcp.example.com --wg-interface wg0
 ~~~
 
 Инсталлятор:
@@ -99,6 +99,37 @@ https://mcp.example.com/<secret>/mcp
 Для приватного single-user deployment этот high-entropy endpoint используется как секрет доступа.
 Не публикуйте его. OAuth 2.1 можно добавить следующим уровнем защиты, если MCP-RDC станет
 многопользовательским или публичным.
+
+## Continuous Deployment
+
+После первичной настройки VPS gateway может обновляться автоматически после каждого успешного CI в `main`.
+
+CD не требует GitHub-токена или deploy key для доступа VPS к репозиторию. GitHub Actions
+архивирует ровно тот commit, который прошёл CI, загружает его на VPS по SSH, запускает
+`install-vps.sh --quiet`, перезапускает systemd service и проверяет `/healthz`.
+
+Workflow находится в `.github/workflows/cd.yml`.
+
+Для включения CD один раз настройте GitHub Environment `production`.
+
+Secrets:
+
+- `MCP_RDC_VPS_HOST` - публичный IP или DNS-имя VPS
+- `MCP_RDC_VPS_USER` - SSH-пользователь: root либо пользователь с passwordless sudo
+- `MCP_RDC_VPS_SSH_KEY` - приватный SSH-ключ для этого пользователя
+- `MCP_RDC_VPS_KNOWN_HOSTS` - необязательно; строка known_hosts. Если не задана, workflow использует `ssh-keyscan`
+
+Variables:
+
+- `MCP_RDC_CD_ENABLED=true` - включает автоматический deploy
+- `MCP_RDC_DOMAIN=mcp.example.com` - публичный домен MCP
+- `MCP_RDC_WG_INTERFACE=wg0` - WireGuard-интерфейс VPS
+- `MCP_RDC_VPS_SSH_PORT=22` - SSH-порт
+
+Пока `MCP_RDC_CD_ENABLED` не равен `true`, CD workflow безопасно пропускает deploy.
+
+На VPS релизы сохраняются в `/opt/mcp-rdc/releases/<commit-sha>`, а
+`/opt/mcp-rdc/current-source` указывает на текущий release. Хранятся последние пять релизов.
 
 ## Модель безопасности
 

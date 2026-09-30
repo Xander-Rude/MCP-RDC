@@ -1,0 +1,123 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-rdc-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-vps:
+    name: Deploy VPS gateway
+    if: >-
+      vars.MCP_RDC_CD_ENABLED == 'true' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      )
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      DEPLOY_HOST: ${{ secrets.MCP_RDC_VPS_HOST }}
+      DEPLOY_USER: ${{ secrets.MCP_RDC_VPS_USER }}
+      DEPLOY_KEY: ${{ secrets.MCP_RDC_VPS_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.MCP_RDC_VPS_KNOWN_HOSTS }}
+      DEPLOY_PORT: ${{ vars.MCP_RDC_VPS_SSH_PORT || '22' }}
+      MCP_DOMAIN: ${{ vars.MCP_RDC_DOMAIN }}
+      WG_INTERFACE: ${{ vars.MCP_RDC_WG_INTERFACE || 'wg0' }}
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$DEPLOY_HOST" ]] || { echo "Missing secret MCP_RDC_VPS_HOST"; exit 1; }
+          [[ -n "$DEPLOY_USER" ]] || { echo "Missing secret MCP_RDC_VPS_USER"; exit 1; }
+          [[ -n "$DEPLOY_KEY" ]] || { echo "Missing secret MCP_RDC_VPS_SSH_KEY"; exit 1; }
+          [[ -n "$MCP_DOMAIN" ]] || { echo "Missing variable MCP_RDC_DOMAIN"; exit 1; }
+          [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]] || { echo "Invalid MCP_RDC_VPS_SSH_PORT"; exit 1; }
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid deploy SHA"; exit 1; }
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          fetch-depth: 1
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 0600 ~/.ssh/id_ed25519
+
+          if [[ -n "$DEPLOY_KNOWN_HOSTS" ]]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 0600 ~/.ssh/known_hosts
+
+      - name: Build deployment archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude=.git -czf "/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz" .
+
+      - name: Upload release
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -P "$DEPLOY_PORT"             "/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/mcp-rdc-$DEPLOY_SHA.tar.gz"
+
+      - name: Deploy and verify gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST"             "bash -s -- '$DEPLOY_SHA' '$MCP_DOMAIN' '$WG_INTERFACE'" <<'REMOTE'
+          set -euo pipefail
+
+          SHA="$1"
+          DOMAIN="$2"
+          WG_IF="$3"
+          ARCHIVE="/tmp/mcp-rdc-$SHA.tar.gz"
+          RELEASE_DIR="/opt/mcp-rdc/releases/$SHA"
+
+          as_root() {
+            if [[ "$(id -u)" -eq 0 ]]; then
+              "$@"
+            else
+              sudo -n "$@"
+            fi
+          }
+
+          as_root mkdir -p "$RELEASE_DIR"
+          as_root tar -xzf "$ARCHIVE" -C "$RELEASE_DIR"
+          as_root bash "$RELEASE_DIR/scripts/install-vps.sh"             --domain "$DOMAIN"             --wg-interface "$WG_IF"             --quiet
+          as_root ln -sfn "$RELEASE_DIR" /opt/mcp-rdc/current-source
+          rm -f "$ARCHIVE"
+
+          mapfile -t old_releases < <(
+            as_root find /opt/mcp-rdc/releases               -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' |
+            sort -rn |
+            awk 'NR > 5 {print $2}'
+          )
+          if (( ${#old_releases[@]} > 0 )); then
+            as_root rm -rf "${old_releases[@]}"
+          fi
+
+          echo "Deployed $SHA"
+          REMOTE
