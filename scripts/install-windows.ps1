@@ -79,9 +79,9 @@ New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $venv = Join-Path $InstallDir "venv"
 Invoke-NativeCommand -FilePath $pythonExe -Arguments ($pythonArgs + @("-m", "venv", $venv))
 
-$pip = Join-Path $venv "Scripts\pip.exe"
-Invoke-NativeCommand -FilePath $pip -Arguments @("install", "--upgrade", "pip")
-Invoke-NativeCommand -FilePath $pip -Arguments @("install", $SourceRoot)
+$venvPython = Join-Path $venv "Scripts\python.exe"
+Invoke-NativeCommand -FilePath $venvPython -Arguments @("-m", "pip", "install", "--upgrade", "pip")
+Invoke-NativeCommand -FilePath $venvPython -Arguments @("-m", "pip", "install", $SourceRoot)
 
 $configPath = Join-Path $InstallDir "agent.env"
 @"
