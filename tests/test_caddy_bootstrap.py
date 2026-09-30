@@ -16,6 +16,6 @@ def test_vps_installer_pins_caddy_admin_and_waits_for_https():
 
     assert "admin 127.0.0.1:2019" in installer
     assert 'respond /healthz "ok" 200' in installer
-    assert 'curl --fail --silent --show-error' in installer
+    assert "curl --fail --silent --show-error" in installer
     assert '--resolve "$DOMAIN:443:127.0.0.1"' in installer
     assert "Caddy failed its HTTPS readiness check." in installer
