@@ -40,13 +40,16 @@ if ! command -v python3 >/dev/null 2>&1; then
   apt-get update
   apt-get install -y python3 python3-venv
 fi
-if ! python3 -m venv --help >/dev/null 2>&1; then
+install -d -m 0755 "$INSTALL_DIR" "$ENV_DIR"
+rm -rf "$INSTALL_DIR/venv"
+
+if ! python3 -m venv "$INSTALL_DIR/venv"; then
+  echo "Python venv is unavailable; installing python3-venv and retrying."
   apt-get update
   apt-get install -y python3-venv
+  rm -rf "$INSTALL_DIR/venv"
+  python3 -m venv "$INSTALL_DIR/venv"
 fi
-
-install -d -m 0755 "$INSTALL_DIR" "$ENV_DIR"
-python3 -m venv "$INSTALL_DIR/venv"
 "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
 "$INSTALL_DIR/venv/bin/pip" install "$ROOT_DIR"
 
