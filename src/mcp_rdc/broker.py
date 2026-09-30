@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -40,10 +41,8 @@ class AgentBroker:
         self._agents[agent_id] = connection
         if old is not None:
             self._fail_pending_for(agent_id, AgentOfflineError("agent reconnected"))
-            try:
+            with contextlib.suppress(Exception):
                 await old.websocket.close(code=4000)
-            except Exception:
-                pass
         return connection
 
     async def unregister(self, agent_id: str, connection: AgentConnection) -> None:
